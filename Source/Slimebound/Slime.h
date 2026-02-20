@@ -5,8 +5,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "Camera/CameraComponent.h"
-#include "GameFramework/PawnMovementComponent.h"
+// #include "GameFramework/PawnMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Components/SphereComponent.h"
 #include "EnhancedInput/Public/InputMappingContext.h"
 #include "EnhancedInput/Public/InputActionValue.h"
 #include "GameFramework/FloatingPawnMovement.h"
@@ -45,6 +46,9 @@ private:
     UPROPERTY(VisibleAnywhere, Category = Mesh)
     UStaticMeshComponent *SlimeMeshComponent;
 
+    UPROPERTY(VisibleAnywhere, Category = Collision)
+    USphereComponent *SlimeCollisionComponent;
+
     //Input Mapping Context 
     UPROPERTY(EditAnywhere, Category = Input)
     UInputMappingContext *Slime_IMC;
@@ -74,6 +78,24 @@ private:
     UPROPERTY(VisibleAnywhere, Category = Property) 
     float bSpringArmMaxClamp;
 
+    UPROPERTY(VisibleAnywhere, Category = Property) 
+    float bDashSpeed;
+
+    UPROPERTY(VisibleAnywhere, Category = Property) 
+    FVector DashStart;
+
+    UPROPERTY(VisibleAnywhere, Category = Property) 
+    FVector DashTarget;
+
+    UPROPERTY(VisibleAnywhere, Category = Property) 
+    float DashElapsed = 0.0f;
+
+    UPROPERTY(VisibleAnywhere, Category = Property) 
+    float DashDuration = 0.3;;
+
+    UPROPERTY(VisibleAnywhere, Category = Property) 
+    bool bIsDashing = false;
+
     //Move Function
     UFUNCTION()
     void Move(const FInputActionValue& Value);
@@ -82,7 +104,7 @@ private:
     UFUNCTION()
     void Look(const FInputActionValue& Value);
 
-    // UFUNCTION()
+    UFUNCTION()
     void Dash(const FInputActionValue& Value);
 
     UFUNCTION()

@@ -6,9 +6,7 @@
 --> Make movement smooth and visually appealing
 
    -----------TASKS-------------
---> Add acceleration when moving - Done
---> Try Different CameraLag options - Done
---> Add a Dash Action
+--> Add a Dash meter which ensures the player cant dash infintely
 --> Add a Jump Action 
 
    -----------BUGS--------------
@@ -37,7 +35,9 @@ ASlime::ASlime() {
 
     InitComponentAndActions();
 
-    bMovementSpeed = 800.0f;
+    bMovementSpeed = 1000.0f;
+    bDashSpeed = 500.f;
+
     bMouseSensitivity_X = 100.f;
     bMouseSensitivity_Y = 100.f;
 
@@ -48,9 +48,12 @@ ASlime::ASlime() {
 }
 
 void ASlime::InitComponentAndActions() {
-    //Root Component
-    USceneComponent* RootScene = CreateDefaultSubobject<USceneComponent>(TEXT("RootScene"));
-    RootComponent = RootScene;      
+
+    SlimeCollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SlimeCollisionComponent"));
+    SetRootComponent(SlimeCollisionComponent);
+    SlimeCollisionComponent->InitSphereRadius(50.f);
+    SlimeCollisionComponent->SetCollisionProfileName(TEXT("Pawn"));
+    SlimeCollisionComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
     SlimeMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SlimeMeshComponent"));
     SlimeMeshComponent->SetupAttachment(RootComponent); 
@@ -60,12 +63,14 @@ void ASlime::InitComponentAndActions() {
         SlimeMeshComponent->SetStaticMesh(MeshAsset.Object);
 
         //Slime defaults
-        FVector SlimeScale = FVector(15.0f, 15.0f, 18.0f);
+        FVector SlimeScale = FVector(15.0f, 15.0f, 15.0f);
         FRotator SlimeRotate = FRotator({0.0f, 270.0f, 0.0f});
 
         //rescale the mesh
         SlimeMeshComponent->SetRelativeScale3D(SlimeScale);
         SlimeMeshComponent->SetRelativeRotation(SlimeRotate);
+        SlimeMeshComponent->SetRelativeLocation(FVector(0.f, 0.f, -60.f));
+        SlimeMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
         UE_LOG(LogSuccess, Warning, TEXT("Mesh loaded successfully!"));
     } 
@@ -97,6 +102,10 @@ void ASlime::InitComponentAndActions() {
     //Look Action
     Slime_IA_Look = NewObject<UInputAction>();
     Slime_IA_Look->ValueType = EInputActionValueType::Axis2D;
+
+    //Dash Action
+    Slime_IA_Dash = NewObject<UInputAction>();
+    Slime_IA_Dash->ValueType = EInputActionValueType::Axis1D;
 
     // Setup Input Mapping Context
     Slime_IMC = NewObject<UInputMappingContext>();
@@ -142,6 +151,9 @@ void ASlime::SetupInputMapping() {
     Look_Right.Modifiers.Add(S_Look_Right);
 
     //Dash Action Mapping
+    FEnhancedActionKeyMapping& Dash = Slime_IMC->MapKey(Slime_IA_Dash, EKeys::LeftShift);
+    UInputTriggerPressed *DashTriggerPressed = NewObject<UInputTriggerPressed>();
+    Dash.Triggers.Add(DashTriggerPressed);
 }
 
 void ASlime::BeginPlay() {
@@ -159,6 +171,20 @@ void ASlime::BeginPlay() {
 
 void ASlime::Tick(float DeltaTime) {
     Super::Tick(DeltaTime);
+
+    if(bIsDashing) {
+        DashElapsed += DeltaTime;
+
+        float Alpha = FMath::Clamp((DashElapsed/DashDuration), 0.f, 1.f);
+        float EasedAlpha = FMath::InterpEaseOut(0.f, 1.f, Alpha, 2.f);
+    
+        FHitResult HitResult;
+        SetActorLocation(FMath::Lerp(DashStart, DashTarget, EasedAlpha), true, &HitResult);
+        
+        if(1.f <= Alpha || HitResult.bBlockingHit) {
+            bIsDashing = false;
+        } 
+    }
 }
 
 void ASlime::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) {
@@ -169,6 +195,7 @@ void ASlime::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) {
     if(Slime_EIC) {
         Slime_EIC->BindAction(Slime_IA_Move, ETriggerEvent::Triggered, this, &ASlime::Move);
         Slime_EIC->BindAction(Slime_IA_Look, ETriggerEvent::Triggered, this, &ASlime::Look);
+        Slime_EIC->BindAction(Slime_IA_Dash, ETriggerEvent::Triggered, this, &ASlime::Dash);
     }
 }
 
@@ -219,6 +246,21 @@ void ASlime::Move(const FInputActionValue& Value) {
         NewLocation += Movement * NewInterpSpeed * GetWorld()->GetDeltaSeconds();
 
         SetActorLocation(NewLocation);
+    }
+}
+
+void ASlime::Dash(const FInputActionValue & Value) {
+    UE_LOG(LogSuccess, Display, TEXT("Value = %f"), Value.Get<float>()); 
+
+    if(Controller && !bIsDashing) {
+        FRotator YawRotation(0, GetActorRotation().Yaw, 0);
+        FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+
+        DashStart = GetActorLocation();
+        DashTarget = DashStart + ForwardDirection * bDashSpeed;
+        
+        DashElapsed = 0.0f;
+        bIsDashing = true;
     }
 }
 
